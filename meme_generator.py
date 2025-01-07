@@ -2,6 +2,7 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 from transformers import BlipProcessor, BlipForConditionalGeneration, pipeline
 import streamlit as st
+from textwrap import wrap
 
 # Set up Streamlit interface
 st.title("Adaptive Meme Generator")
@@ -31,10 +32,24 @@ if uploaded_image:
     meme_generator = pipeline("text-generation", model="gpt2", tokenizer="gpt2")  # Removed use_auth_token
 
     def generate_meme_text(description):
-        prompt = f"Write a funny caption for an image showing {description}:"
-        # Ensure no unnecessary kwargs are passed to this call
-        result = meme_generator(prompt, max_length=100, num_return_sequences=1, truncation=True)
-        return result[0]["generated_text"]
+        prompt = f"Write a short and sarcastic meme caption for an image showing {description}. Keep it under 20 words and make it hilarious:"
+        result = meme_generator(
+            prompt,
+            max_length=50,  # Allow slightly more room for processing
+            num_return_sequences=1,
+            do_sample=True,
+            top_k=50,
+            top_p=0.95,
+            temperature=0.9  # Adjust randomness
+        )
+        # Clean up the generated text
+        generated_text = result[0]["generated_text"]
+        meme_text = generated_text.replace(prompt, "").strip()
+        return meme_text
+
+
+
+
 
     
     meme_caption = generate_meme_text(image_description)
@@ -46,26 +61,44 @@ if uploaded_image:
         if image.mode != "RGB":
             image = image.convert("RGB")
 
+        # Initialize the drawing context
         draw = ImageDraw.Draw(image)
-        font_path = "arial.ttf"  # Change if Arial font is unavailable; provide path to any .ttf font
+
+        # Specify a font path
+        font_path = "arial.ttf"  # Update with the path to a valid .ttf font file
         try:
             font = ImageFont.truetype(font_path, 40)
         except IOError:
+            st.write("Font not found, using default font.")
             font = ImageFont.load_default()
 
-        # Calculate text size using font.getbbox
-        text_bbox = font.getbbox(text)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_height = text_bbox[3] - text_bbox[1]
+        # Dynamically wrap text to fit within the image width
+        max_width = image.width - 40  # Margin of 20 pixels on each side
+        wrapped_text = []
+        for line in text.split("\n"):
+            wrapped_text.extend(wrap(line, width=30))  # Adjust width for your use case
 
-        # Calculate position (bottom-center)
-        width, height = image.size
-        position = ((width - text_width) // 2, height - text_height - 20)
+        # Adjust font size dynamically
+        while True:
+            line_heights = [font.getbbox(line)[3] for line in wrapped_text]
+            total_height = sum(line_heights)
+            if total_height < image.height * 0.7:  # Text should occupy no more than 70% of the image height
+                break
+            font = ImageFont.truetype(font_path, font.size - 2)
 
-        # Draw text on the image
-        draw.text(position, text, fill="white", font=font, stroke_width=2, stroke_fill="black")
-        image.save(output_path, "JPEG")
+        # Calculate text position (centered)
+        y = (image.height - total_height) // 2
+        for line in wrapped_text:
+            text_width = font.getbbox(line)[2]
+            x = (image.width - text_width) // 2
+            draw.text((x, y), line, fill="white", font=font, stroke_width=2, stroke_fill="black")
+            y += font.getbbox(line)[3]
+
+        # Save the image
+        image.save(output_path)
         return output_path
+
+
 
 
 
