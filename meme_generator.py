@@ -33,6 +33,7 @@ if uploaded_image:
         prompt = (
             f"Write a short, funny, and sarcastic dark humor meme for an image showing {description}. "
             "Keep it under 15 words, make it hilarious, and avoid links or irrelevant text:"
+            "Do not use external link, just add a straight to the point funny and sarcastic caption."
         )
         result = meme_generator(
             prompt,
